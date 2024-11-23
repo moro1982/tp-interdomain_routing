@@ -1,0 +1,105 @@
+\documentclass{article}
+\usepackage{graphicx} % Required for inserting images
+\usepackage[spanish]{babel}
+\usepackage{multirow}
+
+\title{TP08 - Routing Din\'amico Interdominio}
+\author{Nicolás Fagetti}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{Introducci\'on}
+En este Laboratorio vimos c\'omo funciona el routing din\'amico interdominio, en particular entre Sistemas Aut\'onomos. El protocolo estudiado se llama BGP (Border Gateway Protocol), y realizamos algunas pruebas en Packet Tracer, en particular, sobre los comandos necesarios para establecer este tipo de ruteo.
+
+\section{Enrutamiento Jer\'arquico}
+
+En este apartado vimos algunos conceptos centrales para comprender el enrutamiento interdominio. El concepto de Sistema Aut\'onomo (AS) engloba un agrupamiento de routers de la misma jerarqu\'ia, a fin de simplificar el enrutamiento, referenciando a este grupo de routers como una unidad. Este conjunto de redes se rige bajo una pol\'itica administrativa centralizada, ya que, como vimos, se trata de un protocolo eminentemente pol\'itico, dictado por la IANA, que es la que asigna a su vez los IDs de los AS. \\
+
+\section{El protocolo BGP}
+El protocolo BGP es un protocolo de ruteo exterior (EGP), y pertenece a la familia ``vector path'', una mejora del vector distancia.
+En este protocolo no se obedece a un algoritmo de mejor ruta, sino que se sigue un conjunto de pol\'iticas propias del AS. \\
+
+Otro concepto importante que vimos es el de vecindad. Seg\'un lo estudiado, el flujo de tr\'afico es inverso al sentido de la vecindad. Es decir, el anuncio de vecindad va en un sentido, y el tr\'afico IP va en sentido contrario. El establecimiento de dicha vecindad no tiene relaci\'on con el intercambio de rutas, por el car\'acter pol\'itico de la decisi\'on que los administradores realizan respecto del anuncio de rutas entre distintos AS. Adem\'as, la vecindad puede ser unilateral, no es necesariamente rec\'iproca. \\
+
+A continuaci\'on, realizamos un escenario sencillo de 2 Routers (R1 y R2) y, luego de asignarles est\'aticamente sus IPs, configuramos el protocolo BGP con los siguientes comandos: \\
+
+\begin{verbatim}
+R1(config)#router bgp 195					
+R1(config-router)#neighbor 193.10.11.2 remote-as 200
+R2(config)#router bgp 200
+R2(config-router)#neighbor 193.10.11.1 remote-as 195
+
+\end{verbatim}
+
+Obs\'ervese que en dichos comandos, asignamos el n\'umero de AS al Router indicado, y luego con el comando ``\texttt{neighbor}'' seguido de la direcci\'on IP del AS vecino + ``\texttt{remote-as}'' y el n\'umero de AS del mismo, quedan configurados ambos Routers con sus respectivos AS bajo el protocolo BGP. \\
+
+Para verificar el estado del protocolo, utilizamos el siguiente comando:
+
+\begin{verbatim}
+R1# show ip bgp summary
+
+BGP router identifier 195.11.14.1, local AS number 195
+BGP table version is 4, main routing table version 6
+1 network entries using 132 bytes of memory
+1 path entries using 52 bytes of memory
+0/0 BGP path/bestpath attribute entries using 0 bytes of memory
+1 BGP AS-PATH entries using 24 bytes of memory
+0 BGP route-map cache entries using 0 bytes of memory
+0 BGP filter-list cache entries using 0 bytes of memory
+Bitfield cache entries: current 1 (at peak 1) using 32 bytes of memory
+BGP using 240 total bytes of memory
+BGP activity 1/0 prefixes, 1/0 paths, scan interval 60 secs
+
+Neighbor        V    AS MsgRcvd MsgSent   TblVer  InQ OutQ Up/Down  State/PfxRcd
+193.10.11.2     4   200      43      45        4    0    0 00:00:58        4
+\end{verbatim}
+
+Efectivamente, constatamos que el n\'umero de AS asignado es 195 (el indicado para R1) y est\'a correctamente identificada la vecindad con el AS200, referenciada en el R2 (IP 193.10.11.2). Ingresando el mismo comando en el otro Router, obtendremos una informaci\'on similar, ya que la vecindad fue establecida rec\'iprocamente. \\
+
+Luego, asignamos la IP 195.11.14.1 al loopback 2 del R1, utilizando los siguientes comandos:
+
+\begin{verbatim}
+R2(config)# interface loopback 2
+R2(config-if)#ip address 195.11.14.2 255.255.255.0
+\end{verbatim}
+
+Por \'ultimo, realizamos el ``announcement'' (anuncio) de dicha red a los vecinos configurados con BGP, con los comandos provistos:
+
+\begin{verbatim}
+R1(config)# router bgp 195
+R1(config-router)# network 195.11.14.0 mask 255.255.255.0
+
+\end{verbatim}
+
+Finalmente, al verificar las rutas del R2, se mostrar\'a lo siguiente: \\
+
+\begin{verbatim}
+R2# show ip route
+
+Codes: L - local, C - connected, S - static, R - RIP, M - mobile, B - BGP
+       D - EIGRP, EX - EIGRP external, O - OSPF, IA - OSPF inter area
+       N1 - OSPF NSSA external type 1, N2 - OSPF NSSA external type 2
+       E1 - OSPF external type 1, E2 - OSPF external type 2, E - EGP
+       i - IS-IS, L1 - IS-IS level-1, L2 - IS-IS level-2, ia - IS-IS inter area
+       * - candidate default, U - per-user static route, o - ODR
+       P - periodic downloaded static route
+
+Gateway of last resort is not set
+
+     193.10.11.0/24 is variably subnetted, 2 subnets, 2 masks
+C       193.10.11.0/24 is directly connected, GigabitEthernet0/0/0
+L       193.10.11.2/32 is directly connected, GigabitEthernet0/0/0
+B    195.11.14.0/24 [20/0] via 193.10.11.1, 00:00:00
+
+\end{verbatim}
+
+Esto significa que la ruta al loopback device est\'a agregada a la tabla de ruteo, a trav\'es del protocolo BGP (indicado por la letra ``B''), via el R1. \\
+
+\section{Referencias}
+\begin{itemize}
+    \item https://github.com/moro1982/tp-interdomain\_routing
+\end{itemize}
+
+\end{document}
